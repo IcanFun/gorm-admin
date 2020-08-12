@@ -13,8 +13,12 @@ type User struct {
 	Username string `json:"username"`
 }
 
+func (User) TableName() string {
+	return "users"
+}
+
 func TestAdmin(t *testing.T) {
-	db, err := gorm.Open("mysql", "root:123456@tcp(127.0.0.1:3306)/fg?charset=utf8&parseTime=True&loc=Local")
+	db, err := gorm.Open("mysql", "root:123456@tcp(192.168.31.201:3306)/fg?charset=utf8&parseTime=True&loc=Local")
 	if !assert.Nil(t, err) {
 		return
 	}
@@ -22,7 +26,7 @@ func TestAdmin(t *testing.T) {
 	g := gin.Default()
 
 	admin := InitAdmin(db, g, "/admin")
-	admin.Table("users", "/users")
+	admin.Table(&User{}, "/users").CanAdd()
 	admin.Start()
 	g.Run(":8080")
 }

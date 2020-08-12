@@ -2,13 +2,18 @@ package gorm_admin
 
 import (
 	"database/sql"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
+type table interface {
+	TableName() string
+}
+
 type Option struct {
-	table                                  string
+	table                                  table
 	url                                    string
 	canAdd, canEdit, canDel                bool
 	selectFunc, addFunc, EditFunc, DelFunc gin.HandlerFunc
@@ -35,7 +40,7 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			req := new(BaseForm)
 			if err := context.ShouldBind(req); err != nil {
 				Error("GetSelectFunc=>param error:%s", err.Error())
-				context.JSON(200, map[string]interface{}{"code": 400, "msg": err.Error()})
+				renderError(context, err)
 				return
 			}
 			if req.Limit == 0 {
@@ -43,15 +48,15 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			}
 
 			var total int64
-			rows, err := db.Table(o.table).Offset(req.Offset).Limit(req.Limit).Count(&total).Rows()
+			rows, err := db.Table(o.table.TableName()).Offset(req.Offset).Limit(req.Limit).Count(&total).Rows()
 			if err != nil {
 				Error("GetSelectFunc=>Find error:%s", err.Error())
-				context.JSON(200, map[string]interface{}{"code": 400, "msg": err.Error()})
+				renderError(context, err)
 				return
 			}
 
 			list := rows2maps(rows)
-			context.JSON(200, map[string]interface{}{"code": 200, "msg": "", "data": map[string]interface{}{"list": list, "total": total}})
+			renderOk(context, map[string]interface{}{"list": list, "total": total})
 		}
 	}
 	return o.selectFunc
@@ -60,7 +65,19 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 	if o.addFunc == nil {
 		o.addFunc = func(context *gin.Context) {
-
+			req := reflect.New(reflect.TypeOf(o.table)).Pointer()
+			if err := context.ShouldBind(req); err != nil {
+				Error("GetSelectFunc=>param error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			err := db.Table(o.table.TableName()).Create(req).Error
+			if err != nil {
+				Error("GetSelectFunc=>Find error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			renderOk(context, o.table)
 		}
 	}
 	return o.addFunc
@@ -82,6 +99,17 @@ func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 		}
 	}
 	return o.DelFunc
+}
+
+func renderError(c *gin.Context, err error) {
+	c.JSON(200, map[string]interface{}{"code": 400, "msg": err.Error()})
+}
+
+func renderOk(c *gin.Context, data interface{}) {
+	if data == nil {
+		data = "ok"
+	}
+	c.JSON(200, map[string]interface{}{"code": 200, "msg": "", "data": data})
 }
 
 // *sql.Rows 转换为 []map[string]interface{}类型

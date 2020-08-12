@@ -22,8 +22,11 @@ func (a *Admin) SetLogLevel(level string) {
 	ConfigZapLog(level)
 }
 
-func (a *Admin) Table(table string, url string) *Option {
-	a.db.AutoMigrate(table)
+func (a *Admin) Table(table table, url string) *Option {
+	err := a.db.AutoMigrate(table).Error
+	if err != nil {
+		Error(err.Error())
+	}
 	option := &Option{table: table, url: url}
 	a.options = append(a.options, option)
 	return option
