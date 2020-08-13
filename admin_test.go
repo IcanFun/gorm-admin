@@ -11,6 +11,7 @@ import (
 type User struct {
 	Id       int64  `json:"id"`
 	Username string `json:"username"`
+	Update   bool   `json:"update"`
 }
 
 func (User) TableName() string {
@@ -26,7 +27,7 @@ func TestAdmin(t *testing.T) {
 	g := gin.Default()
 
 	admin := InitAdmin(db, g, "/admin")
-	admin.Table(&User{}, "/users").CanAdd()
+	admin.Table(&User{}, "Id", "/users").CanAdd().CanEdit().CanDel()
 	admin.Start()
 	g.Run(":8080")
 }

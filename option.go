@@ -1,19 +1,17 @@
 package gorm_admin
 
 import (
-	"database/sql"
+	"errors"
 	"reflect"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
-type table interface {
-	TableName() string
-}
-
 type Option struct {
-	table                                  table
+	table                                  interface{}
+	tablePrtType                           reflect.Type
+	key                                    string
 	url                                    string
 	canAdd, canEdit, canDel                bool
 	selectFunc, addFunc, EditFunc, DelFunc gin.HandlerFunc
@@ -25,12 +23,12 @@ func (o *Option) CanAdd() *Option {
 }
 
 func (o *Option) CanEdit() *Option {
-	o.canAdd = true
+	o.canEdit = true
 	return o
 }
 
 func (o *Option) CanDel() *Option {
-	o.canAdd = true
+	o.canDel = true
 	return o
 }
 
@@ -39,7 +37,7 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 		o.selectFunc = func(context *gin.Context) {
 			req := new(BaseForm)
 			if err := context.ShouldBind(req); err != nil {
-				Error("GetSelectFunc=>param error:%s", err.Error())
+				Error("SelectFunc=>param error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
@@ -48,15 +46,16 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			}
 
 			var total int64
-			rows, err := db.Table(o.table.TableName()).Offset(req.Offset).Limit(req.Limit).Count(&total).Rows()
+			list := reflect.New(reflect.SliceOf(o.tablePrtType))
+			Info("%+v %+v", list.Type(), list.Interface())
+			err := db.Offset(req.Offset).Limit(req.Limit).Find(list.Interface()).Count(&total).Error
 			if err != nil {
-				Error("GetSelectFunc=>Find error:%s", err.Error())
+				Error("SelectFunc=>Find error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
 
-			list := rows2maps(rows)
-			renderOk(context, map[string]interface{}{"list": list, "total": total})
+			renderOk(context, map[string]interface{}{"list": list.Interface(), "total": total})
 		}
 	}
 	return o.selectFunc
@@ -65,19 +64,19 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 	if o.addFunc == nil {
 		o.addFunc = func(context *gin.Context) {
-			req := reflect.New(reflect.TypeOf(o.table)).Pointer()
-			if err := context.ShouldBind(req); err != nil {
-				Error("GetSelectFunc=>param error:%s", err.Error())
+			req := reflect.New(o.tablePrtType.Elem())
+			if err := context.ShouldBind(req.Interface()); err != nil {
+				Error("AddFunc=>param error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
-			err := db.Table(o.table.TableName()).Create(req).Error
+			err := db.Create(req.Interface()).Error
 			if err != nil {
-				Error("GetSelectFunc=>Find error:%s", err.Error())
+				Error("AddFunc=>Find error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
-			renderOk(context, o.table)
+			renderOk(context, req.Interface())
 		}
 	}
 	return o.addFunc
@@ -86,7 +85,24 @@ func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 	if o.EditFunc == nil {
 		o.EditFunc = func(context *gin.Context) {
-
+			req := reflect.New(o.tablePrtType.Elem())
+			if err := context.ShouldBind(req.Interface()); err != nil {
+				Error("EditFunc=>param error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			Info("%+v %+v", req, req.Elem().FieldByName(o.key).IsValid())
+			if req.Elem().FieldByName(o.key).IsZero() {
+				renderError(context, errors.New(o.key+"必填"))
+				return
+			}
+			err := db.Save(req.Interface()).Error
+			if err != nil {
+				Error("EditFunc=>Find error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			renderOk(context, req.Interface())
 		}
 	}
 	return o.EditFunc
@@ -95,7 +111,24 @@ func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 	if o.DelFunc == nil {
 		o.DelFunc = func(context *gin.Context) {
-
+			req := reflect.New(o.tablePrtType.Elem())
+			if err := context.ShouldBind(req.Interface()); err != nil {
+				Error("DelFunc=>param error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			Info("%+v %+v", req, req.Elem().FieldByName(o.key).IsValid())
+			if req.Elem().FieldByName(o.key).IsZero() {
+				renderError(context, errors.New(o.key+"必填"))
+				return
+			}
+			err := db.Delete(req.Interface()).Error
+			if err != nil {
+				Error("DelFunc=>Find error:%s", err.Error())
+				renderError(context, err)
+				return
+			}
+			renderOk(context, nil)
 		}
 	}
 	return o.DelFunc
@@ -110,36 +143,4 @@ func renderOk(c *gin.Context, data interface{}) {
 		data = "ok"
 	}
 	c.JSON(200, map[string]interface{}{"code": 200, "msg": "", "data": data})
-}
-
-// *sql.Rows 转换为 []map[string]interface{}类型
-func rows2maps(rows *sql.Rows) (res []map[string]interface{}) {
-	defer rows.Close()
-	cols, _ := rows.Columns()
-	cache := make([]interface{}, len(cols))
-	// 为每一列初始化一个指针
-	for index, _ := range cache {
-		var a interface{}
-		cache[index] = &a
-	}
-
-	for rows.Next() {
-		rows.Scan(cache...)
-		row := make(map[string]interface{})
-		for i, val := range cache {
-			// 处理数据类型
-			v := *val.(*interface{})
-			switch v.(type) {
-			case []uint8:
-				v = string(v.([]uint8))
-			case nil:
-				v = ""
-			}
-			row[cols[i]] = v
-		}
-
-		res = append(res, row)
-	}
-
-	return res
 }

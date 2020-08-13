@@ -1,6 +1,8 @@
 package gorm_admin
 
 import (
+	"reflect"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -22,13 +24,25 @@ func (a *Admin) SetLogLevel(level string) {
 	ConfigZapLog(level)
 }
 
-func (a *Admin) Table(table table, url string) *Option {
+func (a *Admin) Table(table interface{}, tableKey, url string) *Option {
+	if table == nil || tableKey == "" {
+		panic("参数必填")
+	}
+	itemPtrType := reflect.TypeOf(table)
+	if itemPtrType.Kind() != reflect.Ptr {
+		itemPtrType = reflect.PtrTo(itemPtrType)
+	}
+	item := reflect.New(itemPtrType.Elem())
+	if !item.Elem().FieldByName(tableKey).IsValid() {
+		panic("tableKey填写错误")
+	}
+	option := &Option{table: table, tablePrtType: itemPtrType, key: tableKey, url: url}
+	a.options = append(a.options, option)
+
 	err := a.db.AutoMigrate(table).Error
 	if err != nil {
 		Error(err.Error())
 	}
-	option := &Option{table: table, url: url}
-	a.options = append(a.options, option)
 	return option
 }
 
