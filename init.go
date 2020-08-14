@@ -33,7 +33,7 @@ func (a *Admin) Table(table table, tableKey, url string) *Option {
 	}
 	item := reflect.New(itemPtrType.Elem())
 	if !item.Elem().FieldByName(tableKey).IsValid() {
-		Warn("tableKey 可能存在问题")
+		panic("tableKey无法解析")
 	}
 	option := &Option{table: table, tablePrtType: itemPtrType, key: tableKey, url: url}
 	a.options = append(a.options, option)
@@ -48,13 +48,13 @@ func (a *Admin) Table(table table, tableKey, url string) *Option {
 func (a *Admin) Start() {
 	for _, option := range a.options {
 		a.e.GET(option.url, option.GetSelectFunc(a.db))
-		if option.canAdd {
+		if option.add.Open {
 			a.e.POST(option.url, option.GetAddFunc(a.db))
 		}
-		if option.canEdit {
+		if option.edit.Open {
 			a.e.PUT(option.url, option.GetEditFunc(a.db))
 		}
-		if option.canDel {
+		if option.del.Open {
 			a.e.DELETE(option.url, option.GetDelFunc(a.db))
 		}
 	}

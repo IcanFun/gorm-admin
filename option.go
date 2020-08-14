@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
@@ -20,28 +21,45 @@ type table interface {
 	TableName() string
 }
 
+type CurdCon struct {
+	Open    bool              //能否增删改查
+	Func    gin.HandlerFunc   //自定义方法
+	Mw      []gin.HandlerFunc //增删改查中间件
+	MwParam []string          //中间件保存的参数，用于增删改查的参数补充
+}
+
 type Option struct {
-	table                                  table
-	tablePrtType                           reflect.Type
-	key                                    string
-	url                                    string
-	filter                                 map[string]FilterType
-	canAdd, canEdit, canDel                bool
-	selectFunc, addFunc, editFunc, delFunc gin.HandlerFunc
+	table               table //表格struct
+	tablePrtType        reflect.Type
+	key                 string                //表主键
+	url                 string                //注册路由
+	filter              map[string]FilterType //查询所用的筛选条件
+	add, del, edit, sel CurdCon
+	globalMwParam       []string //中间件保存的参数，用于增删改查的参数补充,全局通用的
 }
 
-func (o *Option) CanAdd() *Option {
-	o.canAdd = true
+func (o *Option) SetGlobalMwParam(keys []string) *Option {
+	o.globalMwParam = keys
 	return o
 }
 
-func (o *Option) CanEdit() *Option {
-	o.canEdit = true
+func (o *Option) SetSelect(con CurdCon) *Option {
+	o.sel = con
 	return o
 }
 
-func (o *Option) CanDel() *Option {
-	o.canDel = true
+func (o *Option) SetAdd(con CurdCon) *Option {
+	o.add = con
+	return o
+}
+
+func (o *Option) SetEdit(con CurdCon) *Option {
+	o.edit = con
+	return o
+}
+
+func (o *Option) SetDel(con CurdCon) *Option {
+	o.del = con
 	return o
 }
 
@@ -50,36 +68,17 @@ func (o *Option) SetFilter(filter map[string]FilterType) *Option {
 	return o
 }
 
-func (o *Option) SetSelectFunc(fun gin.HandlerFunc) *Option {
-	o.selectFunc = fun
-	return o
-}
-
-func (o *Option) SetAddFunc(fun gin.HandlerFunc) *Option {
-	o.addFunc = fun
-	return o
-}
-
-func (o *Option) SetEditFunc(fun gin.HandlerFunc) *Option {
-	o.editFunc = fun
-	return o
-}
-
-func (o *Option) SetDelFunc(fun gin.HandlerFunc) *Option {
-	o.delFunc = fun
-	return o
-}
-
-type Email struct {
-	ID         int
-	UserID     int    `gorm:"index"`                          // 外键 (属于), tag `index`是为该列创建索引
-	Email      string `gorm:"type:varchar(100);unique_index"` // `type`设置sql类型, `unique_index` 为该列设置唯一索引
-	Subscribed bool
-}
-
 func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
-	if o.selectFunc == nil {
-		o.selectFunc = func(context *gin.Context) {
+	if o.sel.Func == nil {
+		o.sel.MwParam = append(o.sel.MwParam, o.globalMwParam...)
+		o.sel.Func = func(context *gin.Context) {
+			for _, value := range o.sel.Mw {
+				value(context)
+				if context.IsAborted() {
+					return
+				}
+			}
+
 			limit := com.StrTo(context.Query("limit")).MustInt()
 			offset := com.StrTo(context.Query("offset")).MustInt()
 			if limit == 0 {
@@ -126,6 +125,11 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 					session = session.Where(fmt.Sprintf("`%s`.`%s` %s ?", o.table.TableName(), key, operator.FilterOperator), String2Type(data, operator.DatabaseType))
 				}
 			}
+			for _, value := range o.sel.MwParam {
+				if data, ok := context.Get(value); ok {
+					session = session.Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), value), data)
+				}
+			}
 			err := session.Find(list.Interface()).Count(&total).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				Error("SelectFunc=>Find error:%s", err.Error())
@@ -136,17 +140,34 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			renderOk(context, map[string]interface{}{"list": list.Interface(), "total": total})
 		}
 	}
-	return o.selectFunc
+	return o.sel.Func
 }
 
 func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
-	if o.addFunc == nil {
-		o.addFunc = func(context *gin.Context) {
+	if o.add.Func == nil {
+		o.add.MwParam = append(o.add.MwParam, o.globalMwParam...)
+
+		o.add.Func = func(context *gin.Context) {
+			for _, value := range o.add.Mw {
+				value(context)
+				if context.IsAborted() {
+					return
+				}
+			}
+
 			req := reflect.New(o.tablePrtType.Elem())
 			if err := context.ShouldBind(req.Interface()); err != nil {
 				Error("AddFunc=>param error:%s", err.Error())
 				renderError(context, err)
 				return
+			}
+			for _, value := range o.add.MwParam {
+				if data, ok := context.Get(value); ok {
+					Info("%+v %+v", req.Elem(), req.Elem().FieldByName(value))
+					if req.Elem().FieldByName(value).IsValid() && req.Elem().FieldByName(value).IsZero() {
+						req.Elem().FieldByName(value).Set(reflect.ValueOf(data))
+					}
+				}
 			}
 			err := db.Create(req.Interface()).Error
 			if err != nil {
@@ -157,48 +178,89 @@ func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 			renderOk(context, req.Interface())
 		}
 	}
-	return o.addFunc
+	return o.add.Func
 }
 
 func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
-	if o.editFunc == nil {
-		o.editFunc = func(context *gin.Context) {
-			req := reflect.New(o.tablePrtType.Elem())
-			if err := context.ShouldBind(req.Interface()); err != nil {
+	if o.edit.Func == nil {
+		o.edit.MwParam = append(o.edit.MwParam, o.globalMwParam...)
+
+		o.edit.Func = func(context *gin.Context) {
+			for _, value := range o.edit.Mw {
+				value(context)
+				if context.IsAborted() {
+					return
+				}
+			}
+
+			req := map[string]interface{}{}
+			if err := context.ShouldBind(&req); err != nil {
 				Error("EditFunc=>param error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
-			Info("%+v %+v", req, req.Elem().FieldByName(o.key).IsValid())
-			if req.Elem().FieldByName(o.key).IsZero() {
+
+			key := SnakeString(o.key)
+			if _, ok := req[key]; !ok {
 				renderError(context, errors.New(o.key+"必填"))
 				return
 			}
-			err := db.Save(req.Interface()).Error
+			for _, value := range o.edit.MwParam {
+				if data, ok := context.Get(value); ok {
+					value = SnakeString(value)
+					if _, ok := req[value]; !ok {
+						req[value] = data
+					}
+				}
+			}
+
+			if _, ok := req["update_at"]; !ok {
+				if _, ok := o.tablePrtType.Elem().FieldByName("UpdateAt"); ok {
+					req["update_at"] = time.Now().Unix()
+				}
+			}
+
+			err := db.Table(o.table.TableName()).Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), key), req[key]).Updates(req).Error
 			if err != nil {
 				Error("EditFunc=>Find error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
-			renderOk(context, req.Interface())
+			renderOk(context, req)
 		}
 	}
-	return o.editFunc
+	return o.edit.Func
 }
 
 func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
-	if o.delFunc == nil {
-		o.delFunc = func(context *gin.Context) {
+	if o.del.Func == nil {
+		o.del.MwParam = append(o.del.MwParam, o.globalMwParam...)
+
+		o.del.Func = func(context *gin.Context) {
+			for _, value := range o.del.Mw {
+				value(context)
+				if context.IsAborted() {
+					return
+				}
+			}
+
 			req := reflect.New(o.tablePrtType.Elem())
 			if err := context.ShouldBind(req.Interface()); err != nil {
 				Error("DelFunc=>param error:%s", err.Error())
 				renderError(context, err)
 				return
 			}
-			Info("%+v %+v", req, req.Elem().FieldByName(o.key).IsValid())
+
 			if req.Elem().FieldByName(o.key).IsZero() {
 				renderError(context, errors.New(o.key+"必填"))
 				return
+			}
+			for _, value := range o.del.MwParam {
+				if data, ok := context.Get(value); ok {
+					if req.Elem().FieldByName(value).IsValid() && req.Elem().FieldByName(value).IsZero() {
+						req.Elem().FieldByName(value).Set(reflect.ValueOf(data))
+					}
+				}
 			}
 			err := db.Delete(req.Interface()).Error
 			if err != nil {
@@ -209,5 +271,5 @@ func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 			renderOk(context, nil)
 		}
 	}
-	return o.delFunc
+	return o.del.Func
 }

@@ -24,6 +24,13 @@ type User struct {
 	Email    Email
 }
 
+type Email struct {
+	ID         int
+	UserID     int    `gorm:"index"`                          // 外键 (属于), tag `index`是为该列创建索引
+	Email      string `gorm:"type:varchar(100);unique_index"` // `type`设置sql类型, `unique_index` 为该列设置唯一索引
+	Subscribed bool
+}
+
 func (User) TableName() string {
 	return "users"
 }
@@ -42,7 +49,13 @@ func TestAdmin(t *testing.T) {
 	g := gin.Default()
 
 	admin := InitAdmin(db, g.Group("/admin"))
-	option := admin.Table(&User{}, "ID", "/users").CanAdd().CanEdit().CanDel()
+	option := admin.Table(&User{}, "ID", "/users").
+		SetAdd(CurdCon{Open: true, MwParam: []string{"Username"}, Mw: []gin.HandlerFunc{func(context *gin.Context) {
+			context.Set("Username", "d")
+		}}}).
+		SetEdit(CurdCon{Open: true}).
+		SetDel(CurdCon{Open: true})
+
 	option.SetFilter(map[string]FilterType{
 		"id": {
 			FilterOperator: FilterOperatorEqual,
