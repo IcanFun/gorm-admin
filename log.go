@@ -11,7 +11,6 @@ import (
 var logger *zap.SugaredLogger
 var (
 	Debug, Warn, Info, Error, DPanic, Panic, Fatal func(template string, args ...interface{})
-	//Debugf, Warnf, Infof, Errorf, DPainc, Panicf, Fatalf func(template string, args ...interface{})
 )
 
 func ConfigZapLog(logLevel string) {

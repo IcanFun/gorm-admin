@@ -10,21 +10,20 @@ import (
 
 type Admin struct {
 	db      *gorm.DB
-	e       *gin.Engine
-	prefix  string
+	e       *gin.RouterGroup
 	options []*Option
 }
 
-func InitAdmin(db *gorm.DB, e *gin.Engine, prefix string) *Admin {
+func InitAdmin(db *gorm.DB, e *gin.RouterGroup) *Admin {
 	ConfigZapLog("")
-	return &Admin{db: db, e: e, prefix: prefix, options: []*Option{}}
+	return &Admin{db: db, e: e, options: []*Option{}}
 }
 
 func (a *Admin) SetLogLevel(level string) {
 	ConfigZapLog(level)
 }
 
-func (a *Admin) Table(table interface{}, tableKey, url string) *Option {
+func (a *Admin) Table(table table, tableKey, url string) *Option {
 	if table == nil || tableKey == "" {
 		panic("参数必填")
 	}
@@ -34,7 +33,7 @@ func (a *Admin) Table(table interface{}, tableKey, url string) *Option {
 	}
 	item := reflect.New(itemPtrType.Elem())
 	if !item.Elem().FieldByName(tableKey).IsValid() {
-		panic("tableKey填写错误")
+		Warn("tableKey 可能存在问题")
 	}
 	option := &Option{table: table, tablePrtType: itemPtrType, key: tableKey, url: url}
 	a.options = append(a.options, option)
@@ -48,15 +47,15 @@ func (a *Admin) Table(table interface{}, tableKey, url string) *Option {
 
 func (a *Admin) Start() {
 	for _, option := range a.options {
-		a.e.GET(a.prefix+option.url, option.GetSelectFunc(a.db))
+		a.e.GET(option.url, option.GetSelectFunc(a.db))
 		if option.canAdd {
-			a.e.POST(a.prefix+option.url, option.GetAddFunc(a.db))
+			a.e.POST(option.url, option.GetAddFunc(a.db))
 		}
 		if option.canEdit {
-			a.e.PUT(a.prefix+option.url, option.GetEditFunc(a.db))
+			a.e.PUT(option.url, option.GetEditFunc(a.db))
 		}
 		if option.canDel {
-			a.e.DELETE(a.prefix+option.url, option.GetDelFunc(a.db))
+			a.e.DELETE(option.url, option.GetDelFunc(a.db))
 		}
 	}
 }
