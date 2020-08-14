@@ -21,7 +21,10 @@ type User struct {
 	ChangeModel
 	Username string `json:"username"`
 	Update   bool   `json:"update"`
-	Email    Email
+}
+
+func (User) TableName() string {
+	return "users"
 }
 
 type Email struct {
@@ -31,8 +34,9 @@ type Email struct {
 	Subscribed bool
 }
 
-func (User) TableName() string {
-	return "users"
+type UserEmail struct {
+	User
+	Email
 }
 
 func TestAdmin(t *testing.T) {
@@ -44,15 +48,24 @@ func TestAdmin(t *testing.T) {
 	db.Callback().Create().Replace("gorm:update_time_stamp", updateTimeStampForCreateCallback)
 	db.Callback().Update().Replace("gorm:update_time_stamp", updateTimeStampForUpdateCallback)
 	db.Callback().Delete().Replace("gorm:delete", deleteCallback)
-	db.AutoMigrate(Email{})
 
 	g := gin.Default()
 
 	admin := InitAdmin(db, g.Group("/admin"))
-	option := admin.Table(&User{}, "ID", "/users").
-		SetAdd(CurdCon{Open: true, MwParam: []string{"Username"}, Mw: []gin.HandlerFunc{func(context *gin.Context) {
-			context.Set("Username", "d")
-		}}}).
+	option := admin.Table(&UserEmail{}, "ID", "/users").
+		SetSelect(CurdCon{
+			Join: []JoinCon{{
+				JoinTable: "emails",
+				ON:        "emails.user_id = users.id",
+			}},
+		}).
+		SetAdd(CurdCon{
+			Open:    true,
+			MwParam: []string{"Username"},
+			Mw: []gin.HandlerFunc{func(context *gin.Context) {
+				context.Set("Username", "d")
+			}},
+		}).
 		SetEdit(CurdCon{Open: true}).
 		SetDel(CurdCon{Open: true})
 

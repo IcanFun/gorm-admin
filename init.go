@@ -38,10 +38,6 @@ func (a *Admin) Table(table table, tableKey, url string) *Option {
 	option := &Option{table: table, tablePrtType: itemPtrType, key: tableKey, url: url}
 	a.options = append(a.options, option)
 
-	err := a.db.AutoMigrate(table).Error
-	if err != nil {
-		Error(err.Error())
-	}
 	return option
 }
 

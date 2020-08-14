@@ -21,11 +21,19 @@ type table interface {
 	TableName() string
 }
 
+type JoinCon struct {
+	JoinTable  string
+	TableAlias string //连表别名
+	ON         string //连表条件
+}
+
 type CurdCon struct {
 	Open    bool              //能否增删改查
 	Func    gin.HandlerFunc   //自定义方法
 	Mw      []gin.HandlerFunc //增删改查中间件
 	MwParam []string          //中间件保存的参数，用于增删改查的参数补充
+	Join    []JoinCon
+	Select  string
 }
 
 type Option struct {
@@ -71,6 +79,9 @@ func (o *Option) SetFilter(filter map[string]FilterType) *Option {
 func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 	if o.sel.Func == nil {
 		o.sel.MwParam = append(o.sel.MwParam, o.globalMwParam...)
+		if o.sel.Select == "" {
+			o.sel.Select = "*"
+		}
 		o.sel.Func = func(context *gin.Context) {
 			for _, value := range o.sel.Mw {
 				value(context)
@@ -130,7 +141,12 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 					session = session.Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), value), data)
 				}
 			}
-			err := session.Find(list.Interface()).Count(&total).Error
+
+			for _, value := range o.sel.Join {
+				session = session.Joins(fmt.Sprintf("LEFT JOIN `%s` %s ON %s", value.JoinTable, value.TableAlias, value.ON))
+			}
+
+			err := session.Select(o.sel.Select).Find(list.Interface()).Count(&total).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				Error("SelectFunc=>Find error:%s", err.Error())
 				renderError(context, err)
