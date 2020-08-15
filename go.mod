@@ -1,4 +1,4 @@
-module gorm-admin
+module github.com/IcanFun/gorm-admin
 
 go 1.14
 
