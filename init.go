@@ -19,6 +19,10 @@ func InitAdmin(db *gorm.DB, e *gin.RouterGroup) *Admin {
 	return &Admin{db: db, e: e, options: []*Option{}}
 }
 
+func (a *Admin) SetDb(db *gorm.DB) {
+	a.db = db
+}
+
 func (a *Admin) SetLogLevel(level string) {
 	ConfigZapLog(level)
 }
