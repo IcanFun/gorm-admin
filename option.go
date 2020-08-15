@@ -146,6 +146,8 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 				session = session.Joins(fmt.Sprintf("LEFT JOIN `%s` %s ON %s", value.JoinTable, value.TableAlias, value.ON))
 			}
 
+			Debug("%+v %+v %+v", list, list.Elem(), list.Interface())
+
 			err := session.Select(o.sel.Select).Find(list.Interface()).Count(&total).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				Error("SelectFunc=>Find error:%s", err.Error())
@@ -185,6 +187,7 @@ func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 					}
 				}
 			}
+			Debug("%+v %+v %+v", req, req.Elem(), req.Interface())
 			err := db.Create(req.Interface()).Error
 			if err != nil {
 				Error("AddFunc=>Find error:%s", err.Error())
@@ -236,6 +239,7 @@ func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 				}
 			}
 
+			Debug("%+v", req)
 			err := db.Table(o.table.TableName()).Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), key), req[key]).Updates(req).Error
 			if err != nil {
 				Error("EditFunc=>Find error:%s", err.Error())
@@ -278,6 +282,7 @@ func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 					}
 				}
 			}
+			Debug("%+v %+v %+v", req, req.Elem(), req.Interface())
 			err := db.Delete(req.Interface()).Error
 			if err != nil {
 				Error("DelFunc=>Find error:%s", err.Error())
