@@ -29,11 +29,11 @@ type JoinCon struct {
 
 type CurdCon struct {
 	Open    bool              //能否增删改查
+	Select  string            //mysql select 的列
 	Func    gin.HandlerFunc   //自定义方法
 	Mw      []gin.HandlerFunc //增删改查中间件
 	MwParam []string          //中间件保存的参数，用于增删改查的参数补充
 	Join    []JoinCon
-	Select  string
 }
 
 type Option struct {
@@ -44,6 +44,26 @@ type Option struct {
 	filter              map[string]FilterType //查询所用的筛选条件
 	add, del, edit, sel CurdCon
 	globalMwParam       []string //中间件保存的参数，用于增删改查的参数补充,全局通用的
+}
+
+func (c *CurdCon) SetFunc(fun gin.HandlerFunc) *CurdCon {
+	c.Func = fun
+	return c
+}
+
+func (c *CurdCon) SetMw(mws ...gin.HandlerFunc) *CurdCon {
+	c.Mw = mws
+	return c
+}
+
+func (c *CurdCon) SetMwParam(params ...string) *CurdCon {
+	c.MwParam = params
+	return c
+}
+
+func (c *CurdCon) SetJoin(joins ...JoinCon) *CurdCon {
+	c.Join = joins
+	return c
 }
 
 func (o *Option) SetGlobalMwParam(keys []string) *Option {
