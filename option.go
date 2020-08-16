@@ -37,10 +37,10 @@ type CurdCon struct {
 }
 
 type Option struct {
-	table               table //表格struct
+	Table               table  //表格struct
+	Key                 string //表主键
+	Url                 string //注册路由
 	tablePrtType        reflect.Type
-	key                 string                //表主键
-	url                 string                //注册路由
 	filter              map[string]FilterType //查询所用的筛选条件
 	add, del, edit, sel CurdCon
 	globalMwParam       []string //中间件保存的参数，用于增删改查的参数补充,全局通用的
@@ -139,26 +139,26 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 					if !has {
 						data = "%" + data + "%"
 					}
-					session = session.Where(fmt.Sprintf("`%s`.`%s` like ?", o.table.TableName(), strings.ReplaceAll(key, "%", "")), data)
+					session = session.Where(fmt.Sprintf("%s like ?", strings.ReplaceAll(key, "%", "")), data)
 				case FilterOperatorIn:
 					s := strings.Split(data, ",")
 					d := make([]interface{}, len(s))
 					for key, value := range s {
 						d[key] = String2Type(value, operator.DatabaseType)
 					}
-					session = session.Where(fmt.Sprintf("`%s`.`%s` in (?)", o.table.TableName(), key), d)
+					session = session.Where(fmt.Sprintf("%s in (?)", key), d)
 				case FilterOperatorBetween:
 					s := strings.Split(data, "-")
 					if len(s) == 2 {
-						session = session.Where(fmt.Sprintf("`%s`.`%s` between ? AND ?", o.table.TableName(), key), String2Type(s[0], operator.DatabaseType), String2Type(s[1], operator.DatabaseType))
+						session = session.Where(fmt.Sprintf("%s between ? AND ?", key), String2Type(s[0], operator.DatabaseType), String2Type(s[1], operator.DatabaseType))
 					}
 				default:
-					session = session.Where(fmt.Sprintf("`%s`.`%s` %s ?", o.table.TableName(), key, operator.FilterOperator), String2Type(data, operator.DatabaseType))
+					session = session.Where(fmt.Sprintf("%s %s ?", key, operator.FilterOperator), String2Type(data, operator.DatabaseType))
 				}
 			}
 			for _, value := range o.sel.MwParam {
 				if data, ok := context.Get(value); ok {
-					session = session.Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), value), data)
+					session = session.Where(fmt.Sprintf("%s = ?", value), data)
 				}
 			}
 
@@ -239,9 +239,9 @@ func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 
-			key := SnakeString(o.key)
+			key := SnakeString(o.Key)
 			if _, ok := req[key]; !ok {
-				renderError(context, errors.New(o.key+"必填"))
+				renderError(context, errors.New(o.Key+"必填"))
 				return
 			}
 			for _, value := range o.edit.MwParam {
@@ -260,7 +260,7 @@ func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 			}
 
 			Debug("%+v", req)
-			err := db.Table(o.table.TableName()).Where(fmt.Sprintf("`%s`.`%s` = ?", o.table.TableName(), key), req[key]).Updates(req).Error
+			err := db.Table(o.Table.TableName()).Where(fmt.Sprintf("`%s`.`%s` = ?", o.Table.TableName(), key), req[key]).Updates(req).Error
 			if err != nil {
 				Error("EditFunc=>Find error:%s", err.Error())
 				renderError(context, err)
@@ -291,8 +291,8 @@ func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 
-			if req.Elem().FieldByName(o.key).IsZero() {
-				renderError(context, errors.New(o.key+"必填"))
+			if req.Elem().FieldByName(o.Key).IsZero() {
+				renderError(context, errors.New(o.Key+"必填"))
 				return
 			}
 			for _, value := range o.del.MwParam {
