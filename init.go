@@ -45,6 +45,10 @@ func (a *Admin) Table(table table, tableKey, url string) *Option {
 	return option
 }
 
+func (a *Admin) AddOption(option *Option) {
+	a.options = append(a.options, option)
+}
+
 func (a *Admin) Start() {
 	for _, option := range a.options {
 		a.e.GET(option.url, option.GetSelectFunc(a.db))
