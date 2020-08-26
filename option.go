@@ -46,6 +46,10 @@ type Option struct {
 	globalMwParam       []string //中间件保存的参数，用于增删改查的参数补充,全局通用的
 }
 
+func GetOpenCurd() *CurdCon {
+	return &CurdCon{Open: true}
+}
+
 func (c *CurdCon) SetFunc(fun gin.HandlerFunc) *CurdCon {
 	c.Func = fun
 	return c
