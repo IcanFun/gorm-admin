@@ -71,23 +71,23 @@ func (o *Option) SetGlobalMwParam(keys []string) *Option {
 	return o
 }
 
-func (o *Option) SetSelect(con CurdCon) *Option {
-	o.sel = con
+func (o *Option) SetSelect(con *CurdCon) *Option {
+	o.sel = *con
 	return o
 }
 
-func (o *Option) SetAdd(con CurdCon) *Option {
-	o.add = con
+func (o *Option) SetAdd(con *CurdCon) *Option {
+	o.add = *con
 	return o
 }
 
-func (o *Option) SetEdit(con CurdCon) *Option {
-	o.edit = con
+func (o *Option) SetEdit(con *CurdCon) *Option {
+	o.edit = *con
 	return o
 }
 
-func (o *Option) SetDel(con CurdCon) *Option {
-	o.del = con
+func (o *Option) SetDel(con *CurdCon) *Option {
+	o.del = *con
 	return o
 }
 

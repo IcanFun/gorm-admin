@@ -35,6 +35,9 @@ func (a *Admin) Table(table table, tableKey, url string) *Option {
 }
 
 func (a *Admin) AddOption(option *Option) {
+	if option == nil {
+		return
+	}
 	if option.Table == nil || option.Key == "" {
 		panic("参数必填")
 	}
