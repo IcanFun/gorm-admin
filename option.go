@@ -122,7 +122,7 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 
 			var total int64
 			list := reflect.New(reflect.SliceOf(o.tablePrtType))
-			session := db.Offset(offset).Limit(limit)
+			session := db.Model(list.Interface())
 
 			for key, operator := range o.filter {
 				data := context.Query(key)
@@ -172,7 +172,7 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 
 			Debug("%+v %+v %+v", list, list.Elem(), list.Interface())
 
-			err := session.Select(o.sel.Select).Find(list.Interface()).Count(&total).Error
+			err := session.Count(&total).Select(o.sel.Select).Offset(offset).Limit(limit).Find(list.Interface()).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				Error("SelectFunc=>Find error:%s", err.Error())
 				renderError(context, err)
