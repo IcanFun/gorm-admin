@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 	"github.com/unknwon/com"
+	"gorm.io/gorm"
 )
 
 type FilterType struct {
