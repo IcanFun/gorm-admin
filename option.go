@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 	"github.com/unknwon/com"
+	"gorm.io/gorm"
 )
 
 type FilterType struct {
@@ -170,8 +170,13 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			}
 
 			Debug("%+v %+v %+v", list, list.Elem(), list.Interface())
-
-			err := session.Count(&total).Select(o.sel.Select).Offset(offset).Limit(limit).Find(list.Interface()).Error
+			session = session.Count(&total)
+			if context.Query("order_by") != "" {
+				session = session.Order(context.Query("order_by"))
+			} else {
+				session = session.Order("id desc")
+			}
+			err := session.Select(o.sel.Select).Offset(offset).Limit(limit).Find(list.Interface()).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				Error("SelectFunc=>Find error:%s", err.Error())
 				renderError(context, err)
