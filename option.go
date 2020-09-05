@@ -43,7 +43,8 @@ type Option struct {
 	tablePrtType        reflect.Type
 	filter              map[string]FilterType //查询所用的筛选条件
 	add, del, edit, sel CurdCon
-	globalMwParam       []string //中间件保存的参数，用于增删改查的参数补充,全局通用的
+	globalMw            []gin.HandlerFunc //中间件,全局通用的
+	globalMwParam       []string          //中间件保存的参数，用于增删改查的参数补充,全局通用的
 }
 
 func GetOpenCurd() *CurdCon {
@@ -68,6 +69,11 @@ func (c *CurdCon) SetMwParam(params ...string) *CurdCon {
 func (c *CurdCon) SetJoin(joins ...JoinCon) *CurdCon {
 	c.Join = joins
 	return c
+}
+
+func (o *Option) SetGlobalMw(mws ...gin.HandlerFunc) *Option {
+	o.globalMw = mws
+	return o
 }
 
 func (o *Option) SetGlobalMwParam(keys []string) *Option {
@@ -107,13 +113,6 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			o.sel.Select = "*"
 		}
 		o.sel.Func = func(context *gin.Context) {
-			for _, value := range o.sel.Mw {
-				value(context)
-				if context.IsAborted() {
-					return
-				}
-			}
-
 			limit := com.StrTo(context.Query("limit")).MustInt()
 			offset := com.StrTo(context.Query("offset")).MustInt()
 			if limit == 0 {
@@ -190,13 +189,6 @@ func (o *Option) GetAddFunc(db *gorm.DB) gin.HandlerFunc {
 		o.add.MwParam = append(o.add.MwParam, o.globalMwParam...)
 
 		o.add.Func = func(context *gin.Context) {
-			for _, value := range o.add.Mw {
-				value(context)
-				if context.IsAborted() {
-					return
-				}
-			}
-
 			req := reflect.New(o.tablePrtType.Elem())
 			if err := context.ShouldBind(req.Interface()); err != nil {
 				Error("AddFunc=>param error:%s", err.Error())
@@ -229,13 +221,6 @@ func (o *Option) GetEditFunc(db *gorm.DB) gin.HandlerFunc {
 		o.edit.MwParam = append(o.edit.MwParam, o.globalMwParam...)
 
 		o.edit.Func = func(context *gin.Context) {
-			for _, value := range o.edit.Mw {
-				value(context)
-				if context.IsAborted() {
-					return
-				}
-			}
-
 			req := map[string]interface{}{}
 			if err := context.ShouldBind(&req); err != nil {
 				Error("EditFunc=>param error:%s", err.Error())
@@ -281,13 +266,6 @@ func (o *Option) GetDelFunc(db *gorm.DB) gin.HandlerFunc {
 		o.del.MwParam = append(o.del.MwParam, o.globalMwParam...)
 
 		o.del.Func = func(context *gin.Context) {
-			for _, value := range o.del.Mw {
-				value(context)
-				if context.IsAborted() {
-					return
-				}
-			}
-
 			req := reflect.New(o.tablePrtType.Elem())
 			if err := context.ShouldBind(req.Interface()); err != nil {
 				Error("DelFunc=>param error:%s", err.Error())

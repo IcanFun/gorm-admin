@@ -55,14 +55,38 @@ func (a *Admin) AddOption(option *Option) {
 
 func (a *Admin) Start() {
 	for _, option := range a.options {
+		if len(option.globalMw) > 0 {
+			a.e.GET(option.Url, option.globalMw...)
+		}
+		if len(option.sel.Mw) > 0 {
+			a.e.GET(option.Url, option.sel.Mw...)
+		}
 		a.e.GET(option.Url, option.GetSelectFunc(a.db))
 		if option.add.Open {
+			if len(option.globalMw) > 0 {
+				a.e.POST(option.Url, option.globalMw...)
+			}
+			if len(option.add.Mw) > 0 {
+				a.e.POST(option.Url, option.add.Mw...)
+			}
 			a.e.POST(option.Url, option.GetAddFunc(a.db))
 		}
 		if option.edit.Open {
+			if len(option.globalMw) > 0 {
+				a.e.PUT(option.Url, option.globalMw...)
+			}
+			if len(option.edit.Mw) > 0 {
+				a.e.PUT(option.Url, option.edit.Mw...)
+			}
 			a.e.PUT(option.Url, option.GetEditFunc(a.db))
 		}
 		if option.del.Open {
+			if len(option.globalMw) > 0 {
+				a.e.DELETE(option.Url, option.globalMw...)
+			}
+			if len(option.del.Mw) > 0 {
+				a.e.DELETE(option.Url, option.del.Mw...)
+			}
 			a.e.DELETE(option.Url, option.GetDelFunc(a.db))
 		}
 	}
