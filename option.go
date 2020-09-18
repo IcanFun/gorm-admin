@@ -174,7 +174,7 @@ func (o *Option) GetSelectFunc(db *gorm.DB) gin.HandlerFunc {
 			if context.Query("order_by") != "" {
 				session = session.Order(context.Query("order_by"))
 			} else {
-				session = session.Order("id desc")
+				session = session.Order(o.Table.TableName() + ".id desc")
 			}
 			err := session.Select(o.sel.Select).Offset(offset).Limit(limit).Find(list.Interface()).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
